@@ -1,0 +1,252 @@
+---
+title: "P8105 hw3"
+author: "Jiacheng Wu"
+date: "10/17/2021"
+output: github_document
+---
+
+```{r, message = FALSE}
+library(tidyverse)
+```
+
+
+## Problem 1
+
+Loading data.
+
+```{r, message = FALSE}
+library(p8105.datasets)
+data("instacart")
+```
+
+Write a short description of the dataset, noting the size and structure of the data, describing some key variables, and giving illstrative examples of observations. 
+
+This dataset has more than 3 million instacart orders. There are `r nrow(instacart)` rows and `r ncol(instacart)` columns. Variables in the table include `r names(instacart)`.
+
+1.1 How many aisles are there, and which aisles are the most items ordered from?
+
+```{r}
+aisle_n = 
+  instacart %>% 
+  count(aisle, name = "n_of_orders") %>% 
+  arrange(desc(n_of_orders))
+
+```
+
+There are `r nrow(aisle_n)` aisles. The aisle that are ordered most from is aisle `fresh vegetables`.
+
+1.2. Make a plot that shows the number of items ordered in each aisle, limiting this to aisles with more than 10000 items ordered. Arrange aisles sensibly, and organize your plot so others can read it.
+
+```{r, message=FALSE, fig.width=8}
+aisle_n %>%  
+  filter(n_of_orders >= 10000) %>% 
+  ggplot(aes(x = n_of_orders, y = aisle, fill = aisle)) +
+  geom_bar(stat = "identity") +
+  labs(
+    title = "Number of orders from each aisle",
+    x = "Aisle",
+    y = "Number of orders",
+    captions = "Aisles with >= 10000 orders only"
+  )
+```
+
+1.3 Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.
+
+```{r}
+instacart  %>%  
+  filter(aisle == c("baking ingredients", "dog food care", "packaged vegetables fruits")) %>% 
+  group_by(aisle, product_name) %>% 
+  summarize(n_of_orders = n()) %>% 
+  arrange(desc(n_of_orders)) %>% 
+  do(head(., n = 3)) %>% 
+  knitr::kable(
+    caption = "Three most popular products from the three most popular aisles"
+  )
+```
+
+
+1.4 Make a table showing the mean hour of the day at which Pink Lady Apples and Coffee Ice Cream are ordered on each day of the week; format this table for human readers (i.e. produce a 2 x 7 table).
+
+```{r}
+instacart %>% 
+  filter(product_name == c("Pink Lady Apples", "Coffee Ice Cream")) %>% 
+  group_by(product_name, order_dow) %>% 
+  summarise(mean_hour = mean(order_hour_of_day)) %>% 
+  mutate(order_dow = recode(order_dow,
+                            "0" = "Monday",
+                            "1" = "Tuesday",
+                            "2" = "Wednesday", 
+                            "3" = "Thursday",
+                            "4" = "Friday",
+                            "5" = "Saturday",
+                            "6" = "Sunday"
+                             )
+         ) %>% 
+  pivot_wider(
+    names_from = order_dow,
+    values_from = mean_hour
+  ) %>% 
+  knitr::kable(
+    digit = 2,
+    caption = "Mean hour of order of a day"
+  )
+  
+```
+
+
+
+## Problem 2
+
+Laad "BRFSS" data
+```{r}
+data("brfss_smart2010")
+brfss = brfss_smart2010
+```
+
+Tidy data
+```{r}
+brfss = 
+ brfss %>% 
+  janitor::clean_names() %>% 
+  filter(topic == "Overall Health") %>% 
+  mutate(
+    response = factor(response,
+                      levels = c("Poor", "Fair", "Good", "Very good", "Excellent"),
+                      ordered = TRUE)
+  )
+```
+
+Answer the following questions.
+
+2.1 In 2002, which states were observed at 7 or more locations? What about in 2010?
+```{r}
+data_2002 = 
+  brfss %>% 
+  filter(year == 2002) %>% 
+  group_by(locationabbr) %>% 
+  summarise(n_of_locations = n()/5) %>% 
+  filter(n_of_locations >= 7) %>% 
+  arrange(n_of_locations)
+
+data_2002 %>% 
+  knitr::kable(
+    caption = "Number of locations in states with 7 or more locations in 2002"
+  )
+```
+
+```{r}
+data_2010 = 
+  brfss %>% 
+  filter(year == 2010) %>% 
+  group_by(locationabbr) %>% 
+  summarize(n_of_locations = n()/5) %>% 
+  filter(n_of_locations >= 7) %>% 
+  arrange(n_of_locations)
+data_2010 %>% 
+  knitr::kable(
+    caption = "Number of locations in states with 7 or more locations in 2010",
+  )
+```
+
+In 2002, there were `6` states with 7 or more locations observed. They are `r pull(data_2002, locationabbr)`. In 2010, there were `14` states with 7 or more locations observed. They are `r pull(data_2010, locationabbr)`.
+
+
+2.2 Construct a dataset that is limited to Excellent responses, and contains, year, state, and a variable that averages the data_value across locations within a state. Make a “spaghetti” plot of this average value over time within a state
+
+```{r}
+excellent_response <-   
+  brfss %>% 
+  filter(response == "Excellent") %>% 
+  group_by(year, locationabbr) %>% 
+  summarize(
+    mean_value = mean(data_value, na.rm = TRUE)
+  )
+
+excellent_response %>% 
+  ggplot(aes(x = year, y = mean_value, color = locationabbr)) +
+  geom_line(size = .3) +
+  labs(
+    caption = "Spaghetti plot of mean values in each state"
+  )
+```
+
+
+2.3 Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses (“Poor” to “Excellent”) among locations in NY State.
+
+
+```{r, message=FALSE}
+brfss %>% 
+  filter(year == c("2006", "2010") & locationabbr == "NY") %>% 
+  ggplot(aes(x = data_value, fill = response)) + 
+  geom_density(alpha = .5) +  
+  facet_grid(. ~ year) +
+  labs(
+    title = "Data value distribution accross staes in 2006 vs in 2010"
+  )
+
+```
+
+
+## Problem 3
+
+Load data
+
+```{r, message=FALSE}
+accel = read_csv("./data/accel_data.csv")
+```
+
+3.1 Tidy, and otherwise wrangle the data.
+```{r}
+accel_df = 
+  accel %>% 
+  janitor::clean_names() %>% 
+  pivot_longer(
+    activity_1:activity_1440,
+    names_prefix = "activity_",
+    names_to = "minute",
+    values_to = "activity"
+  ) %>% 
+  mutate(
+    minute = as.numeric(minute),
+    dow = ifelse(day == weekdays(as.Date("2021-10-18") + 0:1), "weekend", "weekday")
+  ) %>% 
+  relocate(week, day_id, day, dow)
+```
+
+The variables in the dataset are `r names(accel_df)`. There are `r nrow(accel_df)` observations.
+
+3.2 Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate accross minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
+ 
+```{r, message=FALSE}
+total_activity = 
+  accel_df %>% 
+  group_by(week, day) %>% 
+  summarise(sum_of_activity = sum(activity))
+
+total_activity %>% 
+  pivot_wider(
+     names_from = "day", 
+     values_from = "sum_of_activity"
+  ) %>% 
+  knitr::kable(
+    caption = "Total activity in a day for each day"
+  )
+```
+
+The total daily activity is extremely low on the Saturdays and Sundays of Week 4 and 5. 
+
+3.3 Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
+
+```{r}
+accel_df %>% 
+  ggplot(aes(x = minute / 60, y = activity, color = day)) + 
+  geom_line() + 
+  labs(
+    x = "Hour",
+    y = "Activity",
+    title = "24-hour Activity throughout a day for each day"
+  )
+```
+
+The graph indicates that from approximately hour 22:00 to hour 06:00, the activity is lower than that of the rest of the day. Also, activity in weekdays are higher than activities in weekends. 
+
